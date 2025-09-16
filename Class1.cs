@@ -493,6 +493,122 @@ public static class TextboxDimensions2
     }
 }
 
+[HarmonyPatch(typeof(CBattleWindow), "SetSize")]
+public static class BattleWindowSize
+{
+    public static void Prefix(ref CBattleWindow __instance, ref int x, ref int y)
+    {
+        if ((y - 20) % 40 == 0)
+            y = ((y - 20) / 40) * 30 + 20;
+        x -= 80;
+        __instance.SetPos(155+RS2UI.battleXOff, 106+RS2UI.battleYOff);
+    }
+}
+
+[HarmonyPatch(typeof(Battle), "sync")]
+public static class CommandListMax
+{
+    public static void Prefix(ref string[] ___ObjectNameCommand, ref string[] ___ObjectNameUse, ref string[] ___ObjectNamePoint)
+    {
+        if (___ObjectNameCommand.Length < 12) {
+            Traverse.Create(typeof(Battle)).Field("MenuMax").SetValue(12);
+            ___ObjectNameCommand = new string[12];
+            ___ObjectNameUse = new string[12];
+            ___ObjectNamePoint = new string[12];
+            for (int i = 1; i <= 12; i++){
+                ___ObjectNameCommand[i-1] = "mtxt_mgc_n_" + i.ToString("D3");
+                ___ObjectNameUse[i-1] = "mtxt_cmd_105_" + i.ToString("D3");
+                ___ObjectNamePoint[i-1] = "sttxt_jutsu_R_" + i.ToString("D3");
+            }
+        }
+    }
+}
+
+[HarmonyPatch(typeof(Battle), "SetVisibleBattleUI")]
+public static class CommandListMaxTouch
+{
+    public static void Postfix(bool IsVisible, ref CSpriteStudioObject ___UiBattle)
+    {
+        for(int i = 7; i <= 12; i++)
+        {
+            InputManager.set_enable_touch("mtxt_mgc_n_"+i.ToString("D3"), IsVisible);
+        }
+        InputManager.set_enable_touch("btn_joho", false);
+        ___UiBattle.SetVisible("btn_joho", false);
+        InputManager.set_enable_touch("L_btn", false);
+        ___UiBattle.SetVisible("L_btn", false);
+        InputManager.set_enable_touch("R_btn", false);
+        ___UiBattle.SetVisible("R_btn", false);
+    }
+}
+
+[HarmonyPatch(typeof(Battle), "InitializeBattleUI")]
+public static class CommandListMaxTouch2
+{
+    public static void Postfix(ref CSpriteStudioObject ___UiBattle)
+    {
+        for (int i = 7; i <= 12; i++)
+        {
+            ___UiBattle.AddTouchRect("mtxt_mgc_n_" + i.ToString("D3"), 1f, false);
+        }
+    }
+}
+
+[HarmonyPatch(typeof(CSpriteStudioObject), "GetSpriteRect")]
+public static class CommandListMax3
+{
+    static Dictionary<string, Rect> rect6 = new Dictionary<string, Rect>();
+    public static void Postfix(string ObjectName, ref Rect __result, CSpriteStudioObject __instance)
+    {
+        if (ObjectName.Contains("mtxt_mgc_n_") || ObjectName.Contains("mtxt_cmd_105_") || ObjectName.Contains("sttxt_jutsu_R_"))
+        {
+            int num = int.Parse(ObjectName.Substring(ObjectName.Length - 3));
+            if (num == 6)
+                rect6[ObjectName.Substring(0,9)] = __result;
+            else if (num > 6)
+            {
+                __result = new Rect(rect6[ObjectName.Substring(0, 9)]);
+                __result.y += (num - 6) * 40;
+            } 
+            __result.x += RS2UI.battleXOff + (ObjectName.Contains("sttxt_jutsu_R_") ? -80 : 0);
+            __result.y += (num - 1) * -10 - 7 + RS2UI.battleYOff;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(CSpriteStudioObject), "AnalyzeObjectName")]
+public static class CommandListMax2
+{
+    public static void Prefix(ref SSObject ___m_Root)
+    {
+        for(int i = 0; i < ___m_Root.m_parts_list.Count; i++)
+        {
+            if (___m_Root.m_parts_list[i].name.Contains("mtxt_mgc_n_") || ___m_Root.m_parts_list[i].name.Contains("mtxt_cmd_105_") || ___m_Root.m_parts_list[i].name.Contains("sttxt_jutsu_R_"))
+            {
+                if (int.Parse(___m_Root.m_parts_list[i].name.Substring(___m_Root.m_parts_list[i].name.Length - 3)) == 6)
+                {
+                    for (int j = 7; j <= 12; j++)
+                    {
+                        SSObject.Parts newpart = new SSObject.Parts();
+                        newpart.name = ___m_Root.m_parts_list[i].name.Replace("006", j.ToString("D3"));
+                        newpart.m_obj = ___m_Root.m_parts_list[i].m_obj;
+                        newpart.m_id = 33;
+                        ___m_Root.m_parts_list.Add(newpart);
+                    }
+                }
+            }
+        }
+    }
+    public static void Postfix(ref List<CSpriteAnalyze> ___m_AnalyzeList)
+    {
+        Rect rect6 = Rect.zero;
+        for (int i = 0; i < ___m_AnalyzeList.Count; i++)
+        {
+            ___m_AnalyzeList[i].DrawString = ___m_AnalyzeList[i].DrawString.Replace("Cost:", "");
+        }
+    }
+}
+
 //[HarmonyPatch(typeof(SpriteStudioCursor), "SetVisibleFreeCursor")]
 //public static class TextboxCursor
 //{
@@ -581,6 +697,8 @@ namespace RS2
 {
     public class RS2UI : MelonMod
     {
+        public static int battleXOff = -125;
+        public static int battleYOff = 0;
         public static int speedupDisplay = 0;
         public override void OnApplicationQuit()
         {
