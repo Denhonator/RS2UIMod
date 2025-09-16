@@ -5,10 +5,9 @@ Included features:
 * Font replacement for something sharper and closer to the SFC version.
 * Combat UI arrangement more compact and closer to the SFC version.
 * UI texture replacement using textures similar to the SFC version.
-* Skill descriptions are displayed fully without scrolling.
 * Audio sliders for SFX and music separately as well as resolution settings.
 * Options for the above settings can be accessed by pressing Home on the keyboard in-game or from the settings file in AppData\LocalLow\SquareEnix\RomancingSaGa2.
-* Skill etc. descriptions display fully instead of scrolling (Not implemented yet).
+* Skill descriptions are displayed fully without scrolling.
 * Speed toggle. Press R3 or PageDown to toggle between 1x, 2x and 3x speed. This option multiplies FPS. Field and battle speed multipliers are stored and loaded separately.
 * You can also add your own texture replacements. Textures loaded by the game will show up in the Extract folder, so just copy the directory structure into ReplaceFile folder and add your edits.
 
