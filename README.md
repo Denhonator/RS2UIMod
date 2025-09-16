@@ -5,6 +5,7 @@ Included features:
 * Font replacement for something sharper and closer to the SFC version.
 * Combat UI arrangement more compact and closer to the SFC version.
 * UI texture replacement using textures similar to the SFC version.
+* Skill descriptions are displayed fully without scrolling.
 * Audio sliders for SFX and music separately as well as resolution settings.
 * Options for the above settings can be accessed by pressing Home on the keyboard in-game or from the settings file in AppData\LocalLow\SquareEnix\RomancingSaGa2.
 * Skill etc. descriptions display fully instead of scrolling (Not implemented yet).
@@ -17,5 +18,5 @@ Let me know if there are bugs.
 You need to first install MelonLoader for Romancing SaGa 2 https://github.com/LavaGang/MelonLoader  
 Then get the RS2UIMod.zip from the releases page on the right, and extract the ReplaceFile, rs3font and Mods into the game folder (or compile the mod yourself with VS 2017)
 
-### How it looks (for now)
-<img width="960" height="540" alt="rs2mod" src="https://github.com/user-attachments/assets/0fe43147-2033-490f-a6fe-47ee4008a0cf" />
+### How it looks
+<img width="960" height="540" alt="rs2mod" src="https://github.com/user-attachments/assets/936ac880-e45d-471f-8ed0-98e15322b6eb" />
