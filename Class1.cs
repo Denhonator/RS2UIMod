@@ -505,10 +505,51 @@ public static class BattleWindowSize
 {
     public static void Prefix(ref CBattleWindow __instance, ref int x, ref int y)
     {
+        if (x != 450)
+            return;
         if ((y - 20) % 40 == 0)
             y = ((y - 20) / 40) * 30 + 20;
         x -= 147;
         __instance.SetPos(155+RS2UI.battleXOff+40, 106+RS2UI.battleYOff);
+    }
+}
+
+[HarmonyPatch(typeof(GS), "DrawString")]
+public static class ScrollText
+{
+    public static void Prefix(ref string str, ref int _x, ref int _y, int _z, Color32 color, GS.FontEffect effect)
+    {
+        if (TrackGameStateChanges.DetermineGameState(TrackGameStateChanges.newStateFlags) != TrackGameStateChanges.GameState.Battle)
+            return;
+        Traverse.Create(Main.battle).Field("m_HelpScroll").SetValue(0);
+        string m_HelpText = Traverse.Create(Main.battle).Field("m_HelpText").GetValue<string>();
+        if (str == m_HelpText)
+        {
+            str = str.Replace("　　", "    ").Replace("Ally / ", "Ally    ");
+            if (str.IndexOf("    ") < 0 && str.IndexOf('/') > 0)
+                MelonLogger.Msg(str);
+            _x = 175;
+            _y = 470;
+            GS.m_font_scale_x = 0.65f;
+            GS.m_font_scale_y = 0.65f;
+            int threshold = 80;
+
+            int dotindex = str.Length > threshold ? str.LastIndexOf('.', threshold)+2 : -1;
+            int bigspace = str.IndexOf("    ")+4;
+            if (bigspace < 5 && str.Length < threshold)
+                return;
+            int add = bigspace > 4 && str.Length - bigspace < threshold ? 4 : dotindex > 10 && str.Length - dotindex < threshold ? 2 : 1;
+            int index = add==4 ? bigspace : add==2 ? dotindex : str.LastIndexOf(' ', Mathf.Min(threshold, str.Length-1))+1;
+            GS.DrawString(str.Substring(index), _x, _y+20, _z, color, effect);
+            str = str.Substring(0, index);
+            GS.m_font_scale_x = 0.65f;
+            GS.m_font_scale_y = 0.65f;
+        }
+    }
+    static void Postfix()
+    {
+        GS.m_font_scale_x = 1f;
+        GS.m_font_scale_y = 1f;
     }
 }
 
@@ -582,14 +623,12 @@ public static class BattleWindowPosition
             __result.x += RS2UI.battleXOff + (ObjectName.Contains("sttxt_jutsu_R_") ? -107 : 0);
             __result.y += (num - 1) * -10 - 7 + RS2UI.battleYOff;
         }
-        else if (ObjectName.Contains("mtxt_item_n") || ObjectName.Contains("btlwdw_1_b_2_a_3"))
+        else if (ObjectName.Contains("mtxt_item_n"))
         {
             __result.x += RS2UI.battleXOff;
             __result.y += RS2UI.battleYOff+7;
         }
-        else if (ObjectName.Contains("mtxt_player_n") || ObjectName.Contains("btlwdw_1_b_2_a_1") 
-            || ObjectName.Contains("btlwdw_1_b_2_a_2") || ObjectName.Contains("sttxt_jutsu")
-            || ObjectName.Contains("slash_gr"))
+        else if (ObjectName.Contains("mtxt_player_n") || ObjectName.Contains("sttxt_jutsu"))
         {
             __result.x += 110;
         }
