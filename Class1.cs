@@ -517,8 +517,9 @@ public static class BattleWindowSize
 [HarmonyPatch(typeof(GS), "DrawString")]
 public static class ScrollText
 {
-    public static void Prefix(ref string str, ref int _x, ref int _y, int _z, Color32 color, GS.FontEffect effect)
+    public static void Prefix(ref string str, ref int _x, ref int _y, int _z, Color32 color, GS.FontEffect effect, ref Vector2 __state)
     {
+        __state = new Vector2(GS.m_font_scale_x, GS.m_font_scale_y);
         if (TrackGameStateChanges.DetermineGameState(TrackGameStateChanges.newStateFlags) != TrackGameStateChanges.GameState.Battle)
             return;
         Traverse.Create(Main.battle).Field("m_HelpScroll").SetValue(0);
@@ -546,10 +547,10 @@ public static class ScrollText
             GS.m_font_scale_y = 0.65f;
         }
     }
-    static void Postfix()
+    static void Postfix(ref Vector2 __state)
     {
-        GS.m_font_scale_x = 1f;
-        GS.m_font_scale_y = 1f;
+        GS.m_font_scale_x = __state.x;
+        GS.m_font_scale_y = __state.y;
     }
 }
 
