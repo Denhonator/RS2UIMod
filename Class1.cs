@@ -290,6 +290,13 @@ public static class DebugText
         DebugMenu.print(100, 150, "BGM Volume");
         Settings.instance.seVolume = GUI.HorizontalSlider(new Rect(100, 100, 200, 100), Settings.instance.seVolume, 0, 1);
         Settings.instance.bgmVolume = GUI.HorizontalSlider(new Rect(100, 200, 200, 100), Settings.instance.bgmVolume, 0, 1);
+        GUI.Label(new Rect(100, 250, 200, 50), "Pixel perfect resolutions");
+        if(GUI.Button(new Rect(100, 300, 100, 50), "960x540"))
+            Screen.SetResolution(960, 540, false);
+        if (GUI.Button(new Rect(100, 350, 100, 50), "1920x1080"))
+            Screen.SetResolution(1920, 1080, false);
+        if (GUI.Button(new Rect(100, 400, 100, 50), "2880x1620"))
+            Screen.SetResolution(2880, 1620, false);
     }
 }
 
@@ -500,8 +507,8 @@ public static class BattleWindowSize
     {
         if ((y - 20) % 40 == 0)
             y = ((y - 20) / 40) * 30 + 20;
-        x -= 80;
-        __instance.SetPos(155+RS2UI.battleXOff, 106+RS2UI.battleYOff);
+        x -= 147;
+        __instance.SetPos(155+RS2UI.battleXOff+40, 106+RS2UI.battleYOff);
     }
 }
 
@@ -555,23 +562,36 @@ public static class CommandListMaxTouch2
 }
 
 [HarmonyPatch(typeof(CSpriteStudioObject), "GetSpriteRect")]
-public static class CommandListMax3
+public static class BattleWindowPosition
 {
     static Dictionary<string, Rect> rect6 = new Dictionary<string, Rect>();
     public static void Postfix(string ObjectName, ref Rect __result, CSpriteStudioObject __instance)
     {
+        if (TrackGameStateChanges.DetermineGameState(TrackGameStateChanges.newStateFlags) != TrackGameStateChanges.GameState.Battle)
+            return;
         if (ObjectName.Contains("mtxt_mgc_n_") || ObjectName.Contains("mtxt_cmd_105_") || ObjectName.Contains("sttxt_jutsu_R_"))
         {
             int num = int.Parse(ObjectName.Substring(ObjectName.Length - 3));
             if (num == 6)
-                rect6[ObjectName.Substring(0,9)] = __result;
+                rect6[ObjectName.Substring(0, 9)] = __result;
             else if (num > 6)
             {
                 __result = new Rect(rect6[ObjectName.Substring(0, 9)]);
                 __result.y += (num - 6) * 40;
-            } 
-            __result.x += RS2UI.battleXOff + (ObjectName.Contains("sttxt_jutsu_R_") ? -80 : 0);
+            }
+            __result.x += RS2UI.battleXOff + (ObjectName.Contains("sttxt_jutsu_R_") ? -107 : 0);
             __result.y += (num - 1) * -10 - 7 + RS2UI.battleYOff;
+        }
+        else if (ObjectName.Contains("mtxt_item_n") || ObjectName.Contains("btlwdw_1_b_2_a_3"))
+        {
+            __result.x += RS2UI.battleXOff;
+            __result.y += RS2UI.battleYOff+7;
+        }
+        else if (ObjectName.Contains("mtxt_player_n") || ObjectName.Contains("btlwdw_1_b_2_a_1") 
+            || ObjectName.Contains("btlwdw_1_b_2_a_2") || ObjectName.Contains("sttxt_jutsu")
+            || ObjectName.Contains("slash_gr"))
+        {
+            __result.x += 110;
         }
     }
 }
@@ -601,10 +621,50 @@ public static class CommandListMax2
     }
     public static void Postfix(ref List<CSpriteAnalyze> ___m_AnalyzeList)
     {
-        Rect rect6 = Rect.zero;
+        if (TrackGameStateChanges.DetermineGameState(TrackGameStateChanges.newStateFlags) != TrackGameStateChanges.GameState.Battle)
+            return;
         for (int i = 0; i < ___m_AnalyzeList.Count; i++)
         {
-            ___m_AnalyzeList[i].DrawString = ___m_AnalyzeList[i].DrawString.Replace("Cost:", "");
+            Vector3 add = Vector3.zero;
+            if (___m_AnalyzeList[i].DrawString.Contains("Cost:"))
+            {
+                ___m_AnalyzeList[i].IsVisible = false;
+                ___m_AnalyzeList[i].DrawRect.x = -2000;
+                //___m_AnalyzeList[i].DrawString = ___m_AnalyzeList[i].DrawString.Replace("Cost:", "");
+            }
+
+            if (___m_AnalyzeList[i].SSTriangle2.name.Contains("btlwdw_1_b_2_a_3"))
+            {
+                add.x += RS2UI.battleXOff;
+                add.y += -RS2UI.battleYOff-7;
+            }
+            else if (___m_AnalyzeList[i].SSTriangle2.name.Contains("btlwdw_1_b_2_a_1")
+                || ___m_AnalyzeList[i].SSTriangle2.name.Contains("btlwdw_1_b_2_a_2")
+                || ___m_AnalyzeList[i].SSTriangle2.name.Contains("slash_gr"))
+            {
+                add.x += 110;
+            }
+
+            if (add == Vector3.zero)
+                continue;
+
+            for (int j = 0; j < ___m_AnalyzeList[i].SSTriangle2.m_obj.m_anime[0].m_frames[0].m_meshes[___m_AnalyzeList[i].SSTriangle2.m_id - 1].m_vtx.Length; j++)
+            {
+                SSObject.Poly m = ___m_AnalyzeList[i].SSTriangle2.m_obj.m_anime[0].m_frames[0].m_meshes[___m_AnalyzeList[i].SSTriangle2.m_id - 1];
+                ___m_AnalyzeList[i].SSTriangle2.m_obj.m_vtx_array[m.m_vtx[j]] += add + (add.y == 0 ? 0 : j < 2 ? -5 : 5) * Vector3.up
+                                                                                     + (add.y == 0 ? 0 : j % 2 == 1 ? 50 : 0) * Vector3.left;
+            }
+
+            //if (___m_AnalyzeList[i].SSTriangle2.m_obj.m_pos == Vector3.zero && add != Vector3.zero)
+            //{
+            //    MelonLogger.Msg(___m_AnalyzeList[i].SSTriangle2.m_obj.m_tex[___m_AnalyzeList[i].SSTriangle2.m_id].m_name);
+            //    for (int j = 0; j < ___m_AnalyzeList[i].SSTriangle2.m_obj.m_vtx_array.Length; j++)
+            //    {
+            //        if(___m_AnalyzeList[i].SSTriangle2.m_obj.m_tex[___m_AnalyzeList[i].SSTriangle2.m_id].m_name == ___m_AnalyzeList[i].SSTriangle2.name)
+            //            ___m_AnalyzeList[i].SSTriangle2.m_obj.m_vtx_array[j] += add;
+            //    }
+            //    ___m_AnalyzeList[i].SSTriangle2.m_obj.SetPos(add);
+            //}
         }
     }
 }
@@ -697,8 +757,8 @@ namespace RS2
 {
     public class RS2UI : MelonMod
     {
-        public static int battleXOff = -125;
-        public static int battleYOff = 0;
+        public static int battleXOff = -135;
+        public static int battleYOff = -42;
         public static int speedupDisplay = 0;
         public override void OnApplicationQuit()
         {
