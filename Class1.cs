@@ -160,18 +160,20 @@ public static class TrackGameStateChanges
     public static void SetGameSpeedByState(GameState state)
     {
         int curFPS = Application.targetFrameRate;
+        int mult = state == GameState.None || state == GameState.Wait || state == GameState.Exevt || state == GameState.Menu || state == GameState.Pause ? 2 : 1;
         Application.targetFrameRate = state == GameState.Battle ? Settings.GetGameSpeedByIndex(Settings.instance.battleSpeed) :
                                       state == GameState.None || state == GameState.Wait || state == GameState.Exevt ? Settings.GetGameSpeedByIndex(Settings.instance.fieldSpeed) :
                                       state == GameState.Menu || state == GameState.Pause ? 30 : 30;
 
         if (Application.targetFrameRate != curFPS && Application.targetFrameRate > 30)
-        {
             RS2UI.speedupDisplay = 1000 * Application.targetFrameRate / 30 + Application.targetFrameRate * 2;
-        }
         else
-        {
             RS2UI.speedupDisplay = 0;
-        }
+
+        Application.targetFrameRate *= mult;
+        //RS2UI.doublefps = Application.targetFrameRate > 30;
+        Sys.frametime = RS2UI.doublefps ? 16 : 33;
+        Main.core.set_mans_speed();
     }
 
     public static void CopyStateFlagsTo(Core x, StateFlags sf)
@@ -232,6 +234,10 @@ public static class SpeedOptions
         {
             TrackGameStateChanges.IncrementCurrentGameStateSpeed();
         }
+        if (Input.GetKey(KeyCode.End))
+            Application.targetFrameRate = 2000;
+        else if(Application.targetFrameRate == 2000)
+            TrackGameStateChanges.SetGameSpeedByState(TrackGameStateChanges.DetermineGameState(TrackGameStateChanges.newStateFlags));
         if (Input.GetKeyDown(KeyCode.Home))
         {
             if (dbg == null)
@@ -246,6 +252,38 @@ public static class SpeedOptions
         {
             GS.DrawString((RS2UI.speedupDisplay / 1000) + "x", 4, 0, 0, Color.white, GS.FontEffect.SHADOW);
             RS2UI.speedupDisplay--;
+        }
+        if (Core.man_speed_tbl[2] == 2 && RS2UI.doublefps)
+        {
+            for(int i = 0; i < Core.man_speed_tbl.Length; i += 4)
+            {
+                Core.man_speed_tbl[i + 1] *= 2;
+                Core.man_speed_tbl[i + 2] /= 2;
+                Core.man_speed_tbl[i + 3] /= 2;
+            }
+            Core.people_speed_tbl[3] = 0x55;
+            for (int i = 4; i < Core.people_speed_tbl.Length; i += 4)
+            {
+                Core.people_speed_tbl[i + 2] *= 2;
+                Core.people_speed_tbl[i] /= 2;
+                Core.people_speed_tbl[i + 1] /= 2;
+            }
+        }
+        else if(!RS2UI.doublefps && Core.man_speed_tbl[2] == 1)
+        {
+            for (int i = 0; i < Core.man_speed_tbl.Length; i += 4)
+            {
+                Core.man_speed_tbl[i + 1] /= 2;
+                Core.man_speed_tbl[i + 2] *= 2;
+                Core.man_speed_tbl[i + 3] *= 2;
+            }
+            Core.people_speed_tbl[3] = 0xFF;
+            for (int i = 4; i < Core.people_speed_tbl.Length; i += 4)
+            {
+                Core.people_speed_tbl[i + 2] /= 2;
+                Core.people_speed_tbl[i] *= 2;
+                Core.people_speed_tbl[i + 1] *= 2;
+            }
         }
     }
 }
@@ -316,6 +354,125 @@ public static class MapAnywhere
         else
             keyHold = 0;
         DebugText.print = Util.GetKeypadState().ToString();
+
+        if(__instance.speed_count == 4 && RS2UI.doublefps)
+        {
+            __instance.speed_count *= 2;
+            __instance.speed_size_plus /= 2;
+            __instance.speed_size_minus /= 2;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(Core), "set_mans_speed")]
+public static class FPSFixEmperor
+{
+    public static void Postfix(Core __instance)
+    {
+        if (RS2UI.doublefps)
+        {
+            __instance.now_speed_count *= 2;
+            __instance.now_speed_size_plus /= 2;
+            __instance.now_speed_size_minus /= 2;
+        }
+        else if(__instance.now_speed_count == 16 || (__instance.now_speed_count == 8 && __instance.vehicle_count != 0))
+        {
+            __instance.now_speed_count /= 2;
+            __instance.now_speed_size_plus *= 2;
+            __instance.now_speed_size_minus *= 2;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(Core), "npc_obj_put")]
+public static class FPSFixNPCPut
+{
+    public static void Prefix(Core __instance, ref int __state)
+    {
+        int num = 0;
+        __instance.work_o[0] = 0;
+        while (__instance.people[num].people_condition != 255)
+        {
+            __instance.work_o[0]++;
+            num++;
+        }
+        __state = num;
+    }
+    public static void Postfix(Core __instance, ref int __state)
+    {
+        if (RS2UI.doublefps)
+        {
+            __instance.people[__state].people_add_plus = 1;
+            __instance.people[__state].people_add_minus = -1;
+            __instance.people[__state].people_speed_count = 16;
+            __instance.people[__state].ori_people_speed_count = 16;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(Core), "set_vehicle_people")]
+public static class FPSFixVehicle
+{
+    public static void Postfix(Core __instance, int no, int p)
+    {
+        if (RS2UI.doublefps)
+        {
+            __instance.people[p].people_add_plus = 1;
+            __instance.people[p].people_add_minus = -1;
+            __instance.people[p].people_speed_count = 16;
+            __instance.people[p].ori_people_speed_count = 16;
+        }
+    }
+}
+
+[HarmonyPatch(typeof(Core), "move_own_loop")]
+public static class FPSFixEventMove
+{
+    public static bool Prefix(Core __instance)
+    {
+        if (!RS2UI.doublefps)
+            return true;
+
+        if (__instance.man_move_flag_h != 0)
+        {
+            __instance.main_x += __instance.man_move_add_h;
+            __instance.man_move_flag_h -= 2;
+            if (__instance.man_move_flag_h == 0)
+            {
+                if (__instance.man_move_flag_v == 0)
+                {
+                    __instance.man_anime++;
+                    if (__instance.man_move_count_h == 0)
+                    {
+                        __instance.attribute_check_flag = 1;
+                    }
+                }
+                if (__instance.man_move_count_h != 0)
+                {
+                    __instance.man_move_count_h--;
+                    __instance.man_move_flag_h = __instance.speed_count;
+                }
+            }
+        }
+        if (__instance.man_move_flag_v != 0)
+        {
+            __instance.main_y += __instance.man_move_add_v;
+            __instance.man_move_flag_v -= 2;
+            if (__instance.man_move_flag_v == 0)
+            {
+                __instance.man_anime++;
+                if (__instance.man_move_count_v == 0)
+                {
+                    __instance.attribute_check_flag = 1;
+                }
+                else
+                {
+                    __instance.man_move_count_v--;
+                    __instance.man_move_flag_v = __instance.speed_count;
+                }
+            }
+        }
+        return false;
     }
 }
 
@@ -735,11 +892,42 @@ public static class DialogSpacing
     }
 }
 
+//[HarmonyPatch]
+//public static class HalfSpeedFunc
+//{
+//    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+//    {
+//        yield return AccessTools.Method(typeof(Core), "message_lop");
+//    }
+
+//    public static bool Prefix()
+//    {
+//        if (RS2UI.doublefps && Time.frameCount % 2 == 0)
+//            return false;
+//        return true;
+//    }
+//}
+
 [HarmonyPatch(typeof(Core), "message_lop")]
 public static class TextSpacing
 {
     static int flashDir = -1;
-    static void Postfix(ref Core __instance)
+
+    static bool Prefix(Core __instance, int[] ___HumanName)
+    {
+        int i = (int)(__instance.mestbl[__instance.mess_type][Core.mess_adrs] & byte.MaxValue);
+        if (__instance.mess_type == 1)
+            i = ___HumanName[Core.mess_adrs] & 255;
+        if (RS2UI.doublefps && Time.frameCount % 2 == 0 && Core.mess_adrs < __instance.end_mess_adrs)
+        {
+            if (i == 44)
+                __instance.pause_sa();
+            return false;
+        }
+        return true;
+    }
+
+    static void Postfix(ref Core __instance, int[] ___HumanName)
     {
         for(int i = 0; i < __instance.select_adrs.Length; i++)
         {
@@ -751,34 +939,57 @@ public static class TextSpacing
         else if (__instance.cursor_cnt <= 32)
             flashDir = 1;
         __instance.cursor_cnt = Mathf.Clamp(__instance.cursor_cnt - 32 + (int)(flashDir * 32 * 15 * Time.deltaTime), 0, 256);
+
+        int i2 = (int)(__instance.mestbl[__instance.mess_type][Core.mess_adrs] & byte.MaxValue);
+        if (__instance.mess_type == 1)
+            i2 = ___HumanName[Core.mess_adrs] & 255;
+
+        //MelonLogger.Msg(Core.mess_adrs + " / " + __instance.end_mess_adrs);
         //float m_StringColorAdd = Traverse.Create(typeof(SpriteStudioCursor)).Field("m_StringColorAdd").GetValue<float>();
         //float m_StringColor = Traverse.Create(typeof(SpriteStudioCursor)).Field("m_StringColor").GetValue<float>();
         //Traverse.Create(typeof(SpriteStudioCursor)).Field("m_StringColor").SetValue(m_StringColor - m_StringColorAdd + m_StringColorAdd * Time.deltaTime * 15f);
     }
 }
 
-//[HarmonyPatch]
-//public static class DialogSpacingCursor
+//[HarmonyPatch(typeof(Core), "message_lop2")]
+//public static class EventScript
 //{
-//    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+//    static void Prefix(ref Core __instance, int[] ___HumanName)
 //    {
-//        yield return AccessTools.Method(typeof(Window), "drawCursor");
-//        yield return AccessTools.Method(typeof(Window), "drawCursor2");
-//    }
-
-//    public static void Prefix(ref int y)
-//    {
-//        y -= 16;
+//        int i = (int)(__instance.mestbl[__instance.mess_type][Core.mess_adrs] & byte.MaxValue);
+//        if (__instance.mess_type == 1)
+//        {
+//            i = ___HumanName[Core.mess_adrs] & 255;
+//        }
+//        MelonLogger.Msg(i);
 //    }
 //}
 
+[HarmonyPatch]
+public static class DialogSpacingCursor
+{
+    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(Window), "drawCursor");
+        yield return AccessTools.Method(typeof(Window), "drawCursor2");
+    }
+
+    public static void Prefix(ref int y)
+    {
+        if (y % 16 == 0)
+            y = y / 16 * 12;
+    }
+}
+
 //[HarmonyPatch]
-//public static class TextSpacing
+//public static class TextSpacing2
 //{
 //    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
 //    {
 //        yield return AccessTools.Method(typeof(Core), "tab_sa");
 //        yield return AccessTools.Method(typeof(Core), "kaigyo_sub");
+//        yield return AccessTools.Method(typeof(Core), "its2000kanji");
+//        //yield return AccessTools.Method(typeof(Core), "message_lop2");
 //    }
 
 //    public static void Prefix(ref Core __instance, ref int __state)
@@ -800,6 +1011,7 @@ namespace RS2
         public static int battleXOff = -135;
         public static int battleYOff = -42;
         public static int speedupDisplay = 0;
+        public static bool doublefps = true;
         public override void OnApplicationQuit()
         {
             base.OnApplicationQuit();
