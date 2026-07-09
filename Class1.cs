@@ -892,21 +892,33 @@ public static class DialogSpacing
     }
 }
 
-//[HarmonyPatch]
-//public static class HalfSpeedFunc
-//{
-//    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
-//    {
-//        yield return AccessTools.Method(typeof(Core), "message_lop");
-//    }
+[HarmonyPatch]
+public static class HalfSpeedAnim
+{
+    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(Menu), "obj_anm1");
+        yield return AccessTools.Method(typeof(Menu), "obj_anm2");
+        yield return AccessTools.Method(typeof(Menu), "draw_emperor");
+    }
 
-//    public static bool Prefix()
-//    {
-//        if (RS2UI.doublefps && Time.frameCount % 2 == 0)
-//            return false;
-//        return true;
-//    }
-//}
+    public static void Prefix(Menu __instance)
+    {
+        int d = RS2UI.doublefps ? 2 : 1;
+        if(Menu.oamanmtbl[0][1] != d * 2)
+        {
+            Menu.oamanmtbl[0][1] = 2 * d;
+            Menu.oamanmtbl[1][1] = 1 * d;
+            Menu.oamanmtbl[2][1] = 1 * d;
+            Menu.oamanmtbl[3][1] = 2 * d;
+        }
+        if (RS2UI.doublefps && Time.frameCount % 2 == 0)
+        {
+            if(__instance.oam_wait > 0)
+                __instance.oam_wait--;
+        }
+    }
+}
 
 [HarmonyPatch(typeof(Core), "message_lop")]
 public static class TextSpacing
@@ -918,10 +930,18 @@ public static class TextSpacing
         int i = (int)(__instance.mestbl[__instance.mess_type][Core.mess_adrs] & byte.MaxValue);
         if (__instance.mess_type == 1)
             i = ___HumanName[Core.mess_adrs] & 255;
+        if(RS2UI.print == 1)
+            MelonLogger.Msg(i);
         if (RS2UI.doublefps && Time.frameCount % 2 == 0 && Core.mess_adrs < __instance.end_mess_adrs)
         {
             if (i == 44)
                 __instance.pause_sa();
+            if (i == 39)
+                __instance.select_sa();
+            if (i == 49)
+                __instance.select_b_bad();
+            if (i == 79)
+                __instance.sp_effect_code();
             return false;
         }
         return true;
@@ -933,6 +953,8 @@ public static class TextSpacing
         {
             if (__instance.select_adrs[i] % 16 == 0 && __instance.select_adrs[i] > 0)
                 __instance.select_adrs[i] = (__instance.select_adrs[i] / 16) * 12;
+            else if((__instance.select_adrs[i] + 8) % 12 == 0)
+                __instance.select_adrs[i] += 8;
         }
         if (__instance.cursor_cnt >= 255)
             flashDir = -1;
@@ -951,17 +973,71 @@ public static class TextSpacing
     }
 }
 
+[HarmonyPatch(typeof(Core), "sp_effect_code")]
+public static class SpEffect
+{
+    static void Prefix(ref Core __instance)
+    {
+        int num = (int)(__instance.mestbl[__instance.mess_type][Core.mess_adrs+1] & byte.MaxValue);
+        if (RS2UI.print > 0)
+            MelonLogger.Msg("sp: " + num.ToString());
+    }
+}
+
+[HarmonyPatch(typeof(Sys), "setFade", new Type[] { typeof(int), typeof(int), typeof(int), typeof(int) })]
+public static class FPSFixFade
+{
+    static void Prefix(ref int v)
+    {
+        if(RS2UI.doublefps && v > 1)
+            v /= 2;
+    }
+}
+
+//[HarmonyPatch]
+//public static class HalfFunc
+//{
+//    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+//    {
+//        yield return AccessTools.Method(typeof(Core), "fade_out_on_message");
+//    }
+
+//    public static bool Prefix(Core __instance)
+//    {
+//        if (__instance.message_proc[0] == 0)
+//        {
+//            Sys.setFade(100);
+//            __instance.fade_now = 16;
+//            Core.mess_adrs--;
+//            __instance.message_proc[0] = 10;
+//        }
+//        return false;
+//    }
+//}
+
 //[HarmonyPatch(typeof(Core), "message_lop2")]
 //public static class EventScript
 //{
-//    static void Prefix(ref Core __instance, int[] ___HumanName)
+//    //static void Prefix(ref Core __instance, int[] ___HumanName)
+//    //{
+//    //    int i = (int)(__instance.mestbl[__instance.mess_type][Core.mess_adrs] & byte.MaxValue);
+//    //    if (__instance.mess_type == 1)
+//    //    {
+//    //        i = ___HumanName[Core.mess_adrs] & 255;
+//    //    }
+//    //    MelonLogger.Msg(i);
+//    //}
+//    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
 //    {
-//        int i = (int)(__instance.mestbl[__instance.mess_type][Core.mess_adrs] & byte.MaxValue);
-//        if (__instance.mess_type == 1)
+//        foreach (var code in instructions)
 //        {
-//            i = ___HumanName[Core.mess_adrs] & 255;
+//            if (code.opcode == new CodeInstruction(OpCodes.Ldc_I4_8).opcode)
+//                yield return new CodeInstruction(OpCodes.Ldc_I4_6);
+//            else if (code.opcode == new CodeInstruction(OpCodes.Ldc_I4_S).opcode && (sbyte)code.operand == 16)
+//                yield return new CodeInstruction(OpCodes.Ldc_I4_S, 12);
+//            else
+//                yield return code;
 //        }
-//        MelonLogger.Msg(i);
 //    }
 //}
 
@@ -1012,6 +1088,15 @@ namespace RS2
         public static int battleYOff = -42;
         public static int speedupDisplay = 0;
         public static bool doublefps = true;
+        public static int print = 0;
+
+        public override void OnUpdate()
+        {
+            base.OnUpdate();
+            if (Input.GetKeyDown(KeyCode.F1))
+                print = (print + 1) % 2;
+        }
+
         public override void OnApplicationQuit()
         {
             base.OnApplicationQuit();
