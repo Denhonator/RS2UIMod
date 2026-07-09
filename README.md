@@ -14,7 +14,7 @@ Included features:
 Let me know if there are bugs.
 
 ### Install
-You need to first install MelonLoader for Romancing SaGa 2 https://github.com/LavaGang/MelonLoader  
+You need to first install MelonLoader 0.7 or 0.7.1 for Romancing SaGa 2 https://github.com/LavaGang/MelonLoader  
 Then get the RS2UIMod.zip from the releases page on the right, and extract the ReplaceFile, rs3font and Mods into the game folder (or compile the mod yourself with VS 2017)
 
 ### How it looks
