@@ -171,7 +171,7 @@ public static class TrackGameStateChanges
             RS2UI.speedupDisplay = 0;
 
         Application.targetFrameRate *= mult;
-        //RS2UI.doublefps = Application.targetFrameRate > 30;
+        RS2UI.doublefps = mult > 1;
         Sys.frametime = RS2UI.doublefps ? 16 : 33;
         Main.core.set_mans_speed();
     }
@@ -984,62 +984,226 @@ public static class SpEffect
     }
 }
 
-[HarmonyPatch(typeof(Sys), "setFade", new Type[] { typeof(int), typeof(int), typeof(int), typeof(int) })]
-public static class FPSFixFade
+[HarmonyPatch(typeof(Core), "move_ivent_routine_sub")]
+public static class iventPrint
 {
-    static void Prefix(ref int v)
+    static void Prefix(ref Core __instance)
     {
-        if(RS2UI.doublefps && v > 1)
-            v /= 2;
+        int num = __instance.ivent_no[0] & 31;
+        if (RS2UI.print > 0 && (__instance.ivent_sw == 4 || __instance.ivent_sw == 1))
+            MelonLogger.Msg("ivent: " + num.ToString());
     }
 }
 
-//[HarmonyPatch]
-//public static class HalfFunc
-//{
-//    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
-//    {
-//        yield return AccessTools.Method(typeof(Core), "fade_out_on_message");
-//    }
+[HarmonyPatch(typeof(Core), "special_ivent_routine")]
+public static class spIventPrint
+{
+    static void Prefix(ref Core __instance)
+    {
+        int num = __instance.ivent_no[1];
+        if (RS2UI.print > 0)
+            MelonLogger.Msg("sp ivent: " + num.ToString());
+    }
+}
 
-//    public static bool Prefix(Core __instance)
-//    {
-//        if (__instance.message_proc[0] == 0)
-//        {
-//            Sys.setFade(100);
-//            __instance.fade_now = 16;
-//            Core.mess_adrs--;
-//            __instance.message_proc[0] = 10;
-//        }
-//        return false;
-//    }
-//}
+[HarmonyPatch(typeof(FldObject), "Load")]
+public static class SSPrint
+{
+    static void Postfix(string fname)
+    {
+        if (RS2UI.print > 0)
+            MelonLogger.Msg("Load: " + fname);
+    }
+}
 
-//[HarmonyPatch(typeof(Core), "message_lop2")]
-//public static class EventScript
-//{
-//    //static void Prefix(ref Core __instance, int[] ___HumanName)
-//    //{
-//    //    int i = (int)(__instance.mestbl[__instance.mess_type][Core.mess_adrs] & byte.MaxValue);
-//    //    if (__instance.mess_type == 1)
-//    //    {
-//    //        i = ___HumanName[Core.mess_adrs] & 255;
-//    //    }
-//    //    MelonLogger.Msg(i);
-//    //}
-//    static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
-//    {
-//        foreach (var code in instructions)
-//        {
-//            if (code.opcode == new CodeInstruction(OpCodes.Ldc_I4_8).opcode)
-//                yield return new CodeInstruction(OpCodes.Ldc_I4_6);
-//            else if (code.opcode == new CodeInstruction(OpCodes.Ldc_I4_S).opcode && (sbyte)code.operand == 16)
-//                yield return new CodeInstruction(OpCodes.Ldc_I4_S, 12);
-//            else
-//                yield return code;
-//        }
-//    }
-//}
+[HarmonyPatch(typeof(Effect), "sound_call")]
+public static class EffectPrint
+{
+    static void Prefix(int no, Effect __instance)
+    {
+        if (RS2UI.print > 0)
+            MelonLogger.Msg("Effect: " + no.ToString());
+    }
+}
+
+
+[HarmonyPatch(typeof(Sys), "setFade", new Type[] { typeof(int), typeof(int), typeof(int), typeof(int) })]
+public static class FPSFixFade
+{
+    public static int fadeMult = 1;
+    static void Prefix(ref int v)
+    {
+        if (RS2UI.doublefps && v > 1)
+        {
+            v = v * fadeMult / 2;
+            fadeMult = 1;
+        }
+    }
+}
+
+[HarmonyPatch]
+public static class HalfFunc
+{
+    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(FldObject), "fld_motion_update");
+    }
+
+    public static bool Prefix()
+    {
+        return !RS2UI.doublefps || Time.frameCount % 2 == 0;
+    }
+}
+
+[HarmonyPatch]
+public static class FinalBoss1
+{
+    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(Core), "mawasu");
+    }
+
+    public static bool Prefix(Core __instance, ref int __result)
+    {
+        if (!RS2UI.doublefps)
+            return true;
+        for (int i = 0; i < 7; i++)
+        {
+            __instance.kakudo[i * 2] += Mathf.Min(__instance.add_kakudo, 80) / 4;
+            __instance.kakudo[i * 2] %= 360;
+        }
+
+        __instance.set_7peo();
+        __instance.wait_nmi_sa();
+        if (__instance.r_hankei <= 31)
+        {
+            int num = Mathf.Clamp(275 - __instance.r_hankei * 10, 0, 255);
+            Sys.drawFade(0, 0, 0, num);
+        }
+        __instance.exevt_proc[2]--;
+        if (__instance.exevt_proc[2] > 0)
+        {
+            __result = 0;
+            return false;
+        }
+        __instance.exevt_proc[2] = 6;
+        __instance.add_kakudo++;
+        int num2 = __instance.add_kakudo;
+        if (num2 == 16 || num2 == 32 || num2 == 34 || num2 == 40 || num2 == 42)
+        {
+            Sys.drawFade(255, 255, 255, 255);
+            __instance.sound_effect(196);
+        }
+
+        if (__instance.r_hankei > 8)
+        {
+            __instance.r_hankei -= 1;
+        }
+        else
+        {
+            __instance.r_hankei -= 1;
+        }
+        if (__instance.r_hankei < 0)
+        {
+            __instance.r_hankei = 0;
+            __result = 1;
+            return false;
+        }
+        __result = 0;
+
+        return false;
+    }
+}
+
+[HarmonyPatch]
+public static class FinalBoss2
+{
+    static int delay = 60;
+    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(Core), "last_btl_ivent");
+    }
+
+    public static bool Prefix(Core __instance)
+    {
+        delay--;
+        return delay <= 0;
+    }
+}
+
+[HarmonyPatch]
+public static class FinalBoss3
+{
+    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+    {
+        yield return AccessTools.Method(typeof(Core), "uneune_fade_sa");
+    }
+
+    public static void Prefix(Core __instance)
+    {
+        FPSFixFade.fadeMult = 4;
+    }
+}
+
+[HarmonyPatch(typeof(Effect), "boss_come")]
+public static class FinalBoss4
+{
+    static bool oneTime = false;
+    static bool Prefix(ref Effect __instance)
+    {
+        if (__instance.proc[__instance.procstg][0] == 20)
+        {
+            System.Reflection.MethodInfo dynMethod = __instance.GetType().GetMethod("window_calc2",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            dynMethod.Invoke(__instance, new object[] { });
+            __instance.radius = __instance.proc[__instance.procstg][1] * 4 / 2 / 2;
+            for (int i = 0; i < 2; i++)
+            {
+                dynMethod = __instance.GetType().GetMethod("work_h_move",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                dynMethod.Invoke(__instance, new object[] { });
+                dynMethod = __instance.GetType().GetMethod("work_shift",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                dynMethod.Invoke(__instance, new object[] { });
+            }
+
+            __instance.tmp_b++;
+            if(Time.frameCount % 3 != 0)
+                __instance.proc[__instance.procstg][1]++;
+            if (__instance.proc[__instance.procstg][1] >= 192)
+            {
+                __instance.proc[__instance.procstg][0] = 30;
+                __instance.proc[__instance.procstg][1] = 40;
+            }
+            oneTime = true;
+            return false;
+        }
+        else if (__instance.proc[__instance.procstg][0] == 30 && __instance.proc[__instance.procstg][1] >= 0)
+        {
+            if (oneTime)
+            {
+                __instance.proc[__instance.procstg][1] *= 2;
+                oneTime = false;
+            }
+            __instance.proc[__instance.procstg][1]++;
+            System.Reflection.MethodInfo dynMethod = __instance.GetType().GetMethod("work_shift",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            dynMethod.Invoke(__instance, new object[] { });
+            dynMethod.Invoke(__instance, new object[] { });
+            dynMethod = __instance.GetType().GetMethod("work_inc_dec",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            dynMethod.Invoke(__instance, new object[] { });
+            dynMethod.Invoke(__instance, new object[] { });
+            __instance.bosscomeflg2 -= 4;
+
+            __instance.proc[__instance.procstg][1] -= 2;
+
+            return false;
+        }
+
+        return true;
+    }
+}
 
 [HarmonyPatch]
 public static class DialogSpacingCursor
