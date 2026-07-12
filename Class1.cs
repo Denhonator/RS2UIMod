@@ -160,7 +160,7 @@ public static class TrackGameStateChanges
     public static void SetGameSpeedByState(GameState state)
     {
         int curFPS = Application.targetFrameRate;
-        int mult = state == GameState.None || state == GameState.Wait || state == GameState.Exevt || state == GameState.Menu || state == GameState.Pause ? 2 : 1;
+        int mult = state == GameState.Mapchg || state == GameState.None || state == GameState.Wait || state == GameState.Exevt || state == GameState.Menu || state == GameState.Pause ? 2 : 1;
         Application.targetFrameRate = state == GameState.Battle ? Settings.GetGameSpeedByIndex(Settings.instance.battleSpeed) :
                                       state == GameState.None || state == GameState.Wait || state == GameState.Exevt ? Settings.GetGameSpeedByIndex(Settings.instance.fieldSpeed) :
                                       state == GameState.Menu || state == GameState.Pause ? 30 : 30;
