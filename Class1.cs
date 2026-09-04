@@ -170,7 +170,13 @@ public static class TrackGameStateChanges
         else
             RS2UI.speedupDisplay = 0;
 
-        Application.targetFrameRate *= mult;
+        if (Input.GetKey(KeyCode.PageUp))
+        {
+            Application.targetFrameRate = 30;
+            mult = 1;
+        }
+        else
+            Application.targetFrameRate *= mult;
         RS2UI.doublefps = mult > 1;
         Sys.frametime = RS2UI.doublefps ? 16 : 33;
         Main.core.set_mans_speed();
@@ -384,6 +390,20 @@ public static class FPSFixEmperor
     }
 }
 
+[HarmonyPatch(typeof(Core), "set_mans_speed_once")]
+public static class FPSFixEmperor2
+{
+    public static void Postfix(Core __instance)
+    {
+        if (RS2UI.doublefps)
+        {
+            __instance.now_speed_count *= 2;
+            __instance.now_speed_size_plus /= 2;
+            __instance.now_speed_size_minus /= 2;
+        }
+    }
+}
+
 [HarmonyPatch(typeof(Core), "npc_obj_put")]
 public static class FPSFixNPCPut
 {
@@ -422,6 +442,237 @@ public static class FPSFixVehicle
             __instance.people[p].people_speed_count = 16;
             __instance.people[p].ori_people_speed_count = 16;
         }
+    }
+}
+
+//[HarmonyPatch(typeof(Core), "move_by_key")]
+//public static class FPSFixJump3
+//{
+//    public static void Prefix(Core __instance)
+//    {
+//        MelonLogger.Msg(__instance.jump_flag);
+//    }
+//}
+
+[HarmonyPatch(typeof(Core), "no_change_sel")]
+public static class FPSFixJump
+{
+    public static bool Prefix(Core __instance)
+    {
+        if (!RS2UI.doublefps)
+            return true;
+
+        int[] array = new int[] { 4, 8, 2, 1 };
+        __instance.work_a[0] = __instance.man_map_adrs;
+        __instance.now_map_adrs = __instance.man_map_adrs;
+        __instance.get_people_attribute();
+        __instance.man_down_now[0] = __instance.work_l[0];
+        __instance.man_down_now[1] = __instance.work_l[1];
+        __instance.now_bg1_adrs = __instance.sc_bg1_adrs_u_l;
+        __instance.man_down_now[2] = __instance.work_l[2];
+        if ((__instance.map_tenkai_data[__instance.work_a[0] + 2] & 64) != 0)
+        {
+            System.Reflection.MethodInfo dynMethod = __instance.GetType().GetMethod("ivent_count",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            dynMethod.Invoke(__instance, new object[] { });
+            if (!__instance.jmpEventSkip && __instance.ivent_sw != 3 && (__instance.work_b[0] & 255) < 32)
+            {
+                __instance.ivent_sw = 1;
+                __instance.ivent_people = 255;
+                __instance.ivent_no[0] = __instance.work_b[0] & 255;
+                __instance.ivent_no[1] = __instance.work_b[0] / 256;
+                global::Debug.Log("event " + Convert.ToString(__instance.ivent_no[0] * 256 + __instance.ivent_no[1], 16));
+            }
+        }
+        if (__instance.ivent_sw == 3)
+        {
+            __instance.ivent_sw = 0;
+        }
+        if (__instance.jmpEventSkip)
+        {
+            __instance.jmpEventSkip = false;
+        }
+        if ((__instance.man_down_now[0] & 8) != 0)
+        {
+            if ((__instance.man_down_now[2] & 192) == 64)
+            {
+                __instance.nagasare_flag = 1;
+                int num = (__instance.man_down_now[2] >> 2) & 3;
+                __instance.human_key = array[num];
+                num = (__instance.man_down_now[2] >> 4) & 3;
+                __instance.set_mans_speed_once(num);
+            }
+            else if ((__instance.man_down_now[2] & 192) == 192)
+            {
+                if ((__instance.man_down_now[2] & 8) != 0)
+                {
+                    __instance.nagasare_flag = 1;
+                    __instance.human_key = __instance.move_direction;
+                }
+                else if ((__instance.man_down_now[2] & 4) != 0 && __instance.speed_count == 8)
+                {
+                    __instance.speed_count = 8;
+                    __instance.speed_size_plus = 2;
+                    __instance.speed_size_minus = -2;
+                    __instance.jump_flag = 16;
+                    __instance.nagasare_flag = 1;
+                    __instance.human_key = __instance.move_direction;
+                }
+                else if ((__instance.man_down_now[2] & 32) != 0)
+                {
+                    __instance.speed_count = 16;
+                    __instance.speed_size_plus = 1;
+                    __instance.speed_size_minus = -1;
+                    __instance.jump_flag = 16;
+                    __instance.nagasare_flag = 1;
+                    __instance.human_key = __instance.move_direction;
+                }
+            }
+        }
+        if (__instance.black_out / 256 != 0)
+        {
+            __instance.work_a[0] = __instance.man_map_adrs;
+            int num = (int)(__instance.map_tenkai_data[__instance.work_a[0] + 2] & byte.MaxValue);
+            num ^= __instance.man_black_flag;
+            num &= 128;
+            if (num != 0)
+            {
+                global::Debug.Log("blackout " + num);
+                __instance.set_black_out_work2();
+                __instance.exdemo_proc_set(1);
+            }
+        }
+
+        __instance.no_check_down_down();
+
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(Core), "put_main_chara")]
+public static class FPSFixJump2
+{
+    public static bool Prefix(Core __instance)
+    {
+        if (!RS2UI.doublefps)
+            return true;
+
+        if (__instance.man_obj_no == 255 || __instance.main_chr_no_put_flag != 0)
+        {
+            return false;
+        }
+
+        if (__instance.jump_flag != 0)
+        {
+            __instance.jump_flag--;
+            if (__instance.jump_flag == 0)
+            {
+                __instance.non_set_dir_flag = 0;
+                __instance.man_anime++;
+                __instance.man_anime &= 65534;
+            }
+            else if (__instance.jump_flag != 5 && Time.frameCount % 2 == 0)
+            {
+                __instance.man_anime++;
+            }
+            __instance.main_y += Core.jump_kido_tbl[__instance.jump_flag];
+        }
+
+        int[][] array = __instance.main_chara_tbl_adrs;
+        __instance.work_f[0] = __instance.man_add_sub_up;
+        __instance.work_j[0] = __instance.man_add_sub_down;
+        int num = 0;
+        int num2 = 0;
+        if ((__instance.man_anime & 1) != 0)
+        {
+            num = 4;
+        }
+        if ((__instance.man_direction & 255) >= 4)
+        {
+            num = 0;
+            if ((__instance.man_direction & 255) == 5)
+            {
+                num = 1;
+            }
+            __instance.work_f[0] = __instance.man_add_sub_sp;
+            __instance.work_j[0] = __instance.man_add_sub_sp;
+            array = Core.straight_data;
+            num2 = __instance.man_event_pose * 26;
+        }
+        else
+        {
+            num += __instance.man_direction & 255;
+        }
+        __instance.work_a[0] = __instance.main_x - __instance.shake_main_x + -5;
+        __instance.work_b[0] = __instance.main_y - __instance.shake_main_y + 8;
+
+        int i;
+        if (__instance.vehicle_flag == 0)
+        {
+            i = 256;
+        }
+        else
+        {
+            i = __instance.vehicle_obj_no;
+            if (i > 230)
+            {
+                return false;
+            }
+        }
+        Sys.spr[0].m_debug_value = __instance.get_map_attribute(__instance.man_map_adrs, 1);
+        Sys.spr[0].m_map_attr = __instance.get_map_attribute(__instance.man_map_adrs, 1);
+
+        System.Reflection.MethodInfo dynMethod = __instance.GetType().GetMethod("getSdImage",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        __instance.put_chr3x3(0, __instance.sdimg[(int)dynMethod.Invoke(__instance, new object[] { i })].img, array[num], num2, 0, __instance.getObjFlg(i));
+
+        return false;
+    }
+}
+
+[HarmonyPatch(typeof(Core), "move_by_key")]
+public static class FPSFixJump3
+{
+    public static bool Prefix(Core __instance)
+    {
+        if (!RS2UI.doublefps)
+            return true;
+
+        int num = __instance.map_scrol_flag_v;
+        num |= __instance.map_scrol_flag_h;
+        num |= __instance.fade_now;
+        if (num != 0 || Sys.fadeflg)
+        {
+            return false;
+        }
+        if (__instance.jump_flag == 0)
+        {
+            if (__instance.attribute_check_flag == 0)
+            {
+                __instance.no_check_down_down();
+            }
+            else
+            {
+                __instance.check_down_town();
+            }
+        }
+        else
+        {
+            num = Work.partydata[150];
+            num &= 15;
+            if (num != 0)
+            {
+                return false;
+            }
+            __instance.speed_count = 8;
+            __instance.speed_size_plus = 2;
+            __instance.speed_size_minus = -2;
+            __instance.human_key = __instance.move_direction;
+            __instance.no_check_down_down();
+        }
+
+        return false;
     }
 }
 
@@ -888,9 +1139,23 @@ public static class DialogSpacing
     public static void Prefix(ref int cy)
     {
         if(cy % 16 == 0)
-            cy = (cy / 16) * 12;
+            cy = (cy / 16) * 13;
     }
 }
+
+//[HarmonyPatch]
+//public static class HalfSpeedFunc
+//{
+//    public static IEnumerable<System.Reflection.MethodBase> TargetMethods()
+//    {
+//        yield return AccessTools.Method(typeof(Core), "put_main_chara");
+//    }
+
+//    public static bool Prefix()
+//    {
+//        return !RS2UI.doublefps || Time.frameCount % 2 == 0;
+//    }
+//}
 
 [HarmonyPatch]
 public static class HalfSpeedAnim
@@ -924,6 +1189,7 @@ public static class HalfSpeedAnim
 public static class TextSpacing
 {
     static int flashDir = -1;
+    static int prevValue = 0;
 
     static bool Prefix(Core __instance, int[] ___HumanName)
     {
@@ -952,9 +1218,10 @@ public static class TextSpacing
         for(int i = 0; i < __instance.select_adrs.Length; i++)
         {
             if (__instance.select_adrs[i] % 16 == 0 && __instance.select_adrs[i] > 0)
-                __instance.select_adrs[i] = (__instance.select_adrs[i] / 16) * 12;
-            else if((__instance.select_adrs[i] + 8) % 12 == 0)
+                __instance.select_adrs[i] = (__instance.select_adrs[i] / 16) * 13;
+            else if((__instance.select_adrs[i] + 8) % 12 == 0 && __instance.select_adrs[i] != prevValue + 13)
                 __instance.select_adrs[i] += 8;
+            prevValue = __instance.select_adrs[i];
         }
         if (__instance.cursor_cnt >= 255)
             flashDir = -1;
@@ -1217,7 +1484,7 @@ public static class DialogSpacingCursor
     public static void Prefix(ref int y)
     {
         if (y % 16 == 0)
-            y = y / 16 * 12;
+            y = y / 16 * 13;
     }
 }
 
