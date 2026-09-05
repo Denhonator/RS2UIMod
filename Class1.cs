@@ -375,6 +375,8 @@ public static class FPSFixEmperor
 {
     public static void Postfix(Core __instance)
     {
+        if (RS2UI.print > 0)
+            MelonLogger.Msg("set_mans_speed " + RS2UI.doublefps);
         if (RS2UI.doublefps)
         {
             __instance.now_speed_count *= 2;
@@ -395,11 +397,13 @@ public static class FPSFixEmperor2
 {
     public static void Postfix(Core __instance)
     {
+        if (RS2UI.print > 0)
+            MelonLogger.Msg("set_mans_speed_once " + RS2UI.doublefps);
         if (RS2UI.doublefps)
         {
-            __instance.now_speed_count *= 2;
-            __instance.now_speed_size_plus /= 2;
-            __instance.now_speed_size_minus /= 2;
+            __instance.speed_count *= 2;
+            __instance.speed_size_plus /= 2;
+            __instance.speed_size_minus /= 2;
         }
     }
 }
@@ -445,14 +449,32 @@ public static class FPSFixVehicle
     }
 }
 
-//[HarmonyPatch(typeof(Core), "move_by_key")]
-//public static class FPSFixJump3
-//{
-//    public static void Prefix(Core __instance)
-//    {
-//        MelonLogger.Msg(__instance.jump_flag);
-//    }
-//}
+[HarmonyPatch(typeof(Core), "get_move_data")]
+public static class FPSFixMove2
+{
+    public static void Postfix(Core __instance, int __result)
+    {
+        if((__result == 255 || (__result & 128) != 0 || (__result & 64) == 0) && FPSFixMove.print) {
+            MelonLogger.Msg("move_data: " + __result);
+        }
+        FPSFixMove.print = false;
+    }
+}
+
+[HarmonyPatch(typeof(Core), "move_man_auto_sub")]
+public static class FPSFixMove
+{
+    public static bool print = false;
+    public static void Prefix(Core __instance)
+    {
+        if(RS2UI.print > 0)
+            print = true;
+        if (RS2UI.doublefps)
+        {
+
+        }
+    }
+}
 
 [HarmonyPatch(typeof(Core), "no_change_sel")]
 public static class FPSFixJump
@@ -511,6 +533,7 @@ public static class FPSFixJump
                 }
                 else if ((__instance.man_down_now[2] & 4) != 0 && __instance.speed_count == 8)
                 {
+                    MelonLogger.Msg("Jump");
                     __instance.speed_count = 8;
                     __instance.speed_size_plus = 2;
                     __instance.speed_size_minus = -2;
@@ -1190,14 +1213,18 @@ public static class TextSpacing
 {
     static int flashDir = -1;
     static int prevValue = 0;
+    static int lastPrint = 0;
 
     static bool Prefix(Core __instance, int[] ___HumanName)
     {
         int i = (int)(__instance.mestbl[__instance.mess_type][Core.mess_adrs] & byte.MaxValue);
         if (__instance.mess_type == 1)
             i = ___HumanName[Core.mess_adrs] & 255;
-        if(RS2UI.print == 1)
-            MelonLogger.Msg(i);
+        if (RS2UI.print == 1 && i != lastPrint)
+        {
+            MelonLogger.Msg("message_lop: " + i);
+            lastPrint = i;
+        }
         if (RS2UI.doublefps && Time.frameCount % 2 == 0 && Core.mess_adrs < __instance.end_mess_adrs)
         {
             if (i == 44)
@@ -1254,22 +1281,30 @@ public static class SpEffect
 [HarmonyPatch(typeof(Core), "move_ivent_routine_sub")]
 public static class iventPrint
 {
+    static int lastPrint = 0;
     static void Prefix(ref Core __instance)
     {
         int num = __instance.ivent_no[0] & 31;
-        if (RS2UI.print > 0 && (__instance.ivent_sw == 4 || __instance.ivent_sw == 1))
+        if (RS2UI.print > 0 && (__instance.ivent_sw == 4 || __instance.ivent_sw == 1) && num != lastPrint)
+        {
             MelonLogger.Msg("ivent: " + num.ToString());
+            lastPrint = num;
+        }
     }
 }
 
 [HarmonyPatch(typeof(Core), "special_ivent_routine")]
 public static class spIventPrint
 {
+    static int lastPrint = 0;
     static void Prefix(ref Core __instance)
     {
         int num = __instance.ivent_no[1];
-        if (RS2UI.print > 0)
+        if (RS2UI.print > 0 && lastPrint != num)
+        {
             MelonLogger.Msg("sp ivent: " + num.ToString());
+            lastPrint = num;
+        }
     }
 }
 
