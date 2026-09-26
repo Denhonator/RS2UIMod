@@ -179,7 +179,6 @@ public static class TrackGameStateChanges
             Application.targetFrameRate *= mult;
         RS2UI.doublefps = mult > 1;
         Sys.frametime = RS2UI.doublefps ? 16 : 33;
-        Main.core.set_mans_speed();
     }
 
     public static void CopyStateFlagsTo(Core x, StateFlags sf)
@@ -376,14 +375,14 @@ public static class FPSFixEmperor
     public static void Postfix(Core __instance)
     {
         if (RS2UI.print > 0)
-            MelonLogger.Msg("set_mans_speed " + RS2UI.doublefps);
+            MelonLogger.Msg("set_mans_speed " + RS2UI.doublefps + " vehicle_flag: " + __instance.vehicle_flag);
         if (RS2UI.doublefps)
         {
             __instance.now_speed_count *= 2;
             __instance.now_speed_size_plus /= 2;
             __instance.now_speed_size_minus /= 2;
         }
-        else if(__instance.now_speed_count == 16 || (__instance.now_speed_count == 8 && __instance.vehicle_count != 0))
+        else if(__instance.now_speed_count == 16 || (__instance.now_speed_count == 8 && __instance.vehicle_flag != 0))
         {
             __instance.now_speed_count /= 2;
             __instance.now_speed_size_plus *= 2;
@@ -392,21 +391,21 @@ public static class FPSFixEmperor
     }
 }
 
-[HarmonyPatch(typeof(Core), "set_mans_speed_once")]
-public static class FPSFixEmperor2
-{
-    public static void Postfix(Core __instance)
-    {
-        if (RS2UI.print > 0)
-            MelonLogger.Msg("set_mans_speed_once " + RS2UI.doublefps);
-        if (RS2UI.doublefps)
-        {
-            __instance.speed_count *= 2;
-            __instance.speed_size_plus /= 2;
-            __instance.speed_size_minus /= 2;
-        }
-    }
-}
+//[HarmonyPatch(typeof(Core), "set_mans_speed_once")]
+//public static class FPSFixEmperor2
+//{
+//    public static void Postfix(Core __instance)
+//    {
+//        if (RS2UI.print > 0)
+//            MelonLogger.Msg("set_mans_speed_once " + RS2UI.doublefps);
+//        if (RS2UI.doublefps)
+//        {
+//            __instance.speed_count *= 2;
+//            __instance.speed_size_plus /= 2;
+//            __instance.speed_size_minus /= 2;
+//        }
+//    }
+//}
 
 [HarmonyPatch(typeof(Core), "npc_obj_put")]
 public static class FPSFixNPCPut
@@ -533,7 +532,7 @@ public static class FPSFixJump
                 }
                 else if ((__instance.man_down_now[2] & 4) != 0 && __instance.speed_count == 8)
                 {
-                    MelonLogger.Msg("Jump");
+                    //MelonLogger.Msg("Jump");
                     __instance.speed_count = 8;
                     __instance.speed_size_plus = 2;
                     __instance.speed_size_minus = -2;
